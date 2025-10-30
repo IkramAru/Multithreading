@@ -1,0 +1,67 @@
+[*] mode=bench, workers=1
+[*] Spawning 1 worker threads...
+[+] Worker 0 started
+ [drop=0][02:31:08] [Worker 0] processed=991 dropped=0 avg_lat=379.68 us max_lat=3265 us
+ [drop=0][02:31:09] [Worker 0] processed=2461 dropped=0 avg_lat=305.13 us max_lat=13056 us
+ [drop=0][02:31:10] [Worker 0] processed=2433 dropped=0 avg_lat=135.61 us max_lat=736 us
+ [drop=0][02:31:11] [Worker 0] processed=2234 dropped=0 avg_lat=141.00 us max_lat=3261 us
+ [drop=0][02:31:12] [Worker 0] processed=629 dropped=0 avg_lat=198.81 us max_lat=998 us
+ [drop=0][02:31:13] [Worker 0] processed=1210 dropped=0 avg_lat=1597.89 us max_lat=11901 us
+ [drop=0][02:31:14] [Worker 0] processed=1854 dropped=0 avg_lat=1668.51 us max_lat=11313 us
+ [drop=0][02:31:15] [Worker 0] processed=2537 dropped=0 avg_lat=139.02 us max_lat=955 us
+ [drop=0][02:31:16] [Worker 0] processed=1239 dropped=0 avg_lat=158.90 us max_lat=2299 us
+ [drop=0][02:31:17] [Worker 0] processed=890 dropped=0 avg_lat=179.29 us max_lat=679 us
+ [drop=0][02:31:18] [Worker 0] processed=818 dropped=0 avg_lat=173.10 us max_lat=2119 us
+ [drop=0][02:31:19] [Worker 0] processed=1507 dropped=0 avg_lat=193.46 us max_lat=1742 us
+ [drop=0][02:31:20] [Worker 0] processed=2122 dropped=0 avg_lat=201.60 us max_lat=855 us
+ [drop=0][02:31:21] [Worker 0] processed=620 dropped=0 avg_lat=240.01 us max_lat=565 us
+ [drop=0][02:31:22] [Worker 0] processed=681 dropped=0 avg_lat=233.87 us max_lat=602 us
+ [drop=0][02:31:23] [Worker 0] processed=676 dropped=0 avg_lat=226.29 us max_lat=1131 us
+ [drop=0][02:31:24] [Worker 0] processed=792 dropped=0 avg_lat=218.14 us max_lat=1611 us
+ [drop=0][02:31:25] [Worker 0] processed=892 dropped=0 avg_lat=222.45 us max_lat=564 us
+ [drop=0][02:31:26] [Worker 0] processed=898 dropped=0 avg_lat=225.74 us max_lat=691 us
+ [drop=0][02:31:27] [Worker 0] processed=884 dropped=0 avg_lat=227.58 us max_lat=444 us
+ [drop=0][02:31:28] [Worker 0] processed=812 dropped=0 avg_lat=228.60 us max_lat=815 us
+ [drop=0][02:31:29] [Worker 0] processed=860 dropped=0 avg_lat=227.92 us max_lat=672 us
+ [drop=0][02:31:30] [Worker 0] processed=789 dropped=0 avg_lat=222.32 us max_lat=577 us
+ [drop=0][02:31:31] [Worker 0] processed=639 dropped=0 avg_lat=356.57 us max_lat=43004 us
+ [drop=0][02:31:32] [Worker 0] processed=638 dropped=0 avg_lat=236.09 us max_lat=649 us
+ [drop=0][02:31:33] [Worker 0] processed=728 dropped=0 avg_lat=215.67 us max_lat=561 us
+ [drop=0][02:31:34] [Worker 0] processed=662 dropped=0 avg_lat=225.52 us max_lat=810 us
+ [drop=0][02:31:35] [Worker 0] processed=662 dropped=0 avg_lat=223.59 us max_lat=583 us
+ [drop=0][02:31:36] [Worker 0] processed=752 dropped=0 avg_lat=243.82 us max_lat=524 us
+ [drop=0][02:31:37] [Worker 0] processed=884 dropped=0 avg_lat=332.22 us max_lat=6476 us
+ [drop=0][02:31:38] [Worker 0] processed=891 dropped=0 avg_lat=227.20 us max_lat=752 us
+ [drop=0][02:31:39] [Worker 0] processed=670 dropped=0 avg_lat=319.47 us max_lat=10931 us
+ [drop=0][02:31:40] [Worker 0] processed=696 dropped=0 avg_lat=209.83 us max_lat=517 us
+ [drop=0][02:31:41] [Worker 0] processed=632 dropped=0 avg_lat=246.16 us max_lat=667 us
+ [drop=0][02:31:42] [Worker 0] processed=829 dropped=0 avg_lat=224.45 us max_lat=778 us
+ [drop=0][02:31:43] [Worker 0] processed=769 dropped=0 avg_lat=217.30 us max_lat=580 us
+ [drop=0][02:31:44] [Worker 0] processed=657 dropped=0 avg_lat=230.60 us max_lat=597 us
+ [drop=0][02:31:45] [Worker 0] processed=669 dropped=0 avg_lat=258.24 us max_lat=835 us
+ [drop=0][02:31:46] [Worker 0] processed=877 dropped=0 avg_lat=272.00 us max_lat=1018 us
+ [drop=0][02:31:47] [Worker 0] processed=743 dropped=0 avg_lat=456.42 us max_lat=5836 us
+ [drop=0][02:31:48] [Worker 0] processed=737 dropped=0 avg_lat=250.80 us max_lat=689 us
+ [drop=0][02:31:49] [Worker 0] processed=719 dropped=0 avg_lat=241.11 us max_lat=953 us
+ [drop=0][02:31:50] [Worker 0] processed=601 dropped=0 avg_lat=234.36 us max_lat=473 us
+ [drop=0][02:31:51] [Worker 0] processed=897 dropped=0 avg_lat=219.63 us max_lat=626 us
+ [drop=0][02:31:52] [Worker 0] processed=764 dropped=0 avg_lat=225.02 us max_lat=532 us
+ [drop=0][02:31:53] [Worker 0] processed=628 dropped=0 avg_lat=330.86 us max_lat=19655 us
+ [drop=0][02:31:54] [Worker 0] processed=633 dropped=0 avg_lat=236.39 us max_lat=828 us
+ [drop=0][02:31:55] [Worker 0] processed=728 dropped=0 avg_lat=257.77 us max_lat=667 us
+ [drop=0][02:31:56] [Worker 0] processed=713 dropped=0 avg_lat=232.25 us max_lat=628 us
+ [drop=0][02:31:57] [Worker 0] processed=782 dropped=0 avg_lat=227.05 us max_lat=706 us
+ [drop=0][02:31:58] [Worker 0] processed=646 dropped=0 avg_lat=239.32 us max_lat=569 us
+ [drop=0][02:31:59] [Worker 0] processed=688 dropped=0 avg_lat=223.94 us max_lat=532 us
+ [drop=0][02:32:00] [Worker 0] processed=691 dropped=0 avg_lat=224.60 us max_lat=563 us
+ [drop=0][02:32:01] [Worker 0] processed=697 dropped=0 avg_lat=212.84 us max_lat=422 us
+ [drop=0][02:32:02] [Worker 0] processed=793 dropped=0 avg_lat=217.94 us max_lat=624 us
+ [drop=0][02:32:03] [Worker 0] processed=668 dropped=0 avg_lat=240.14 us max_lat=585 us
+ [drop=0][02:32:04] [Worker 0] processed=883 dropped=0 avg_lat=244.38 us max_lat=2438 us
+ [drop=0][02:32:05] [Worker 0] processed=896 dropped=0 avg_lat=303.49 us max_lat=1257 us
+ [drop=0][02:32:06] [Worker 0] processed=841 dropped=0 avg_lat=215.10 us max_lat=636 us
+ [drop=0][02:32:07] [Worker 0] processed=491 dropped=0 avg_lat=223.13 us max_lat=507 us
+
+[!] XDP program detached automatically
+
+[*] Program successfully exited
