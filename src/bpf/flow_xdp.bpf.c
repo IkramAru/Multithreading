@@ -25,6 +25,8 @@ struct {
 #ifndef ETH_P_8021AD
 #define ETH_P_8021AD 0x88A8
 #endif
+#define RX_IFINDEX 3
+#define TX_IFINDEX 4
 
 /* --- Helper parsing Ethernet + VLAN --- */
 static __always_inline int parse_eth(void **cur, void *end, __u16 *h_proto) {
@@ -51,6 +53,8 @@ int xdp_flow(struct xdp_md *ctx)
     void *data     = (void *)(long)ctx->data;
     void *cur = data;
 
+    __u32 ifindex = ctx->ingress_ifindex;
+
     __u16 h_proto;
     if (parse_eth(&cur, data_end, &h_proto) < 0)
         return XDP_PASS;
@@ -62,8 +66,14 @@ int xdp_flow(struct xdp_md *ctx)
     ev->ts_ns   = bpf_ktime_get_ns();
     ev->ifindex = ctx->ingress_ifindex;
     ev->pkt_len = (__u16)((long)data_end - (long)data);
-    ev->direction = 0;
 
+    if (ifindex == RX_IFINDEX)
+        ev->direction = 0;  // RX
+    else if (ifindex == TX_IFINDEX)
+        ev->direction = 1;  // TX
+    else
+        ev->direction = 2;  // unknown
+        
     /* --- Parsing IPv4 --- */
     if (h_proto == ETH_P_IP) {
         struct iphdr *ip = (void *)cur;

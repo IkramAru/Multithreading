@@ -8,8 +8,10 @@ typedef unsigned long long __u64;
 
 /* Event per-paket: user-space bebas agregasi jadi flow */
 struct flow_event {
-    __u64 ts_ns;         /* timestamp */
-    __u32 ifindex;       /* ingress ifindex */
+    __u64 packets;         
+    __u64 bytes;         
+    __u64 ts_ns;         /* waktu paket terakhir diterima*/
+    __u32 ifindex;       /* interface asal paket */
     __u8  ip_version;    /* 4 atau 6 */
     __u8  l4_proto;      /* IPPROTO_TCP/UDP/ICMP/... */
     __u16 pkt_len;       /* panjang paket */
