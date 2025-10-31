@@ -102,7 +102,7 @@ static int cmp_ev_ts(const void *a, const void *b) {
 }
 
 static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n) {
-    if (!out  !arr  n == 0) return;
+    if (!out || !arr || n == 0) return;
 
     qsort(arr, n, sizeof(arr[0]), cmp_ev_ts);
 
@@ -227,7 +227,7 @@ int main(int argc, char **argv) {
         goto cleanup;
     }
 
-    rb = ring_buffernew(bpf_mapfd(skel->maps.events), handle_event, NULL, NULL);
+    rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
     if (!rb) {
         fprintf(stderr, "Failed to create ring buffer\n");
         goto cleanup;
