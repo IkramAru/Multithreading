@@ -46,10 +46,12 @@ static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n);
 static void sigint_handler(int signo) {
     (void)signo;
     exiting = 1;
-    if (g_link) {
-        bpf_link__destroy(g_link);
-        g_link = NULL;
-        fprintf(stderr, "\n[!] XDP program detached automatically\n");
+    for (int i = 0; i < link_count; i++) {
+        if (links[i]) {
+            bpf_link__destroy(links[i]);
+            links[i] = NULL;
+            fprintf(stderr, "\n[!] XDP detached from interface #%d\n", i);
+        }
     }
 }
 
@@ -220,6 +222,36 @@ int main(int argc, char **argv) {
     }
 
     prog = skel->progs.xdp_flow;
+    /* --- multi-interface attach --- */
+    struct bpf_link *links[8] = {0};
+    int link_count = 0;
+
+    char *ifnames = strdup(argv[2]);
+    char *tok = strtok(ifnames, ",");
+    while (tok && link_count < 8) {
+        int ifx = if_nametoindex(tok);
+        if (!ifx) {
+            fprintf(stderr, "Invalid ifname: %s\n", tok);
+        } else {
+            links[link_count] = bpf_program__attach_xdp(prog, ifx);
+            if (libbpf_get_error(links[link_count])) {
+                fprintf(stderr, "Failed to attach XDP on %s: %ld\n",
+                        tok, libbpf_get_error(links[link_count]));
+                links[link_count] = NULL;
+            } else {
+                fprintf(stderr, "[+] Attached on interface %s (ifindex=%d)\n", tok, ifx);
+                link_count++;
+            }
+        }
+        tok = strtok(NULL, ",");
+    }
+    free(ifnames);
+
+    if (link_count == 0) {
+        fprintf(stderr, "No valid interfaces attached. Exiting.\n");
+        goto cleanup;
+    }
+
     g_link = bpf_program__attach_xdp(prog, ifindex);
     if (libbpf_get_error(g_link)) {
         fprintf(stderr, "Failed to attach XDP: %ld\n", libbpf_get_error(g_link));
