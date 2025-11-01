@@ -20,6 +20,9 @@ int g_num_workers = 1;
 atomic_uint_fast64_t g_dropped = 0;
 
 static struct bpf_link *g_link = NULL;
+#define MAX_IFACES 4
+static struct bpf_link *links[MAX_IFACES] = {0};
+static int link_count = 0;
 static enum { MODE_DEBUG, MODE_BENCH, MODE_CSV } g_mode = MODE_DEBUG;
 static FILE *csv_file = NULL;
 static volatile sig_atomic_t exiting = 0;
