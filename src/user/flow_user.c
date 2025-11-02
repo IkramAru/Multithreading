@@ -8,6 +8,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <net/if.h>
+#include <time.h>
 
 #include <bpf/libbpf.h>
 #include <bpf/bpf.h>
@@ -19,62 +20,81 @@
 int g_num_workers = 1;
 atomic_uint_fast64_t g_dropped = 0;
 
-static struct bpf_link *g_link = NULL;
-#define MAX_IFACES 4
-static struct bpf_link *links[MAX_IFACES] = {0};
+static struct bpf_link **g_links = NULL;
 static int link_count = 0;
 static enum { MODE_DEBUG, MODE_BENCH, MODE_CSV } g_mode = MODE_DEBUG;
 static FILE *csv_file = NULL;
 static volatile sig_atomic_t exiting = 0;
 
 /* --- collector globals --- */
-#define COLLECTOR_MAX_EVENTS 200000   /* ukuran buffer maksimal */
+#define COLLECTOR_MAX_EVENTS 200000
 static pthread_t collector_thread;
 static pthread_mutex_t collector_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t  collector_cond  = PTHREAD_COND_INITIALIZER;
-
 struct ev_copy { struct flow_event ev; };
 static struct ev_copy *collector_buf = NULL;
 static size_t collector_len = 0;
 static size_t collector_cap = 0;
-
-/* flush interval (ms) */
 static const unsigned collector_interval_ms = 100;
 
-/* --- forward declarations --- */
-static void *collector_fn(void *arg);
-static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n);
-
-/* --- Signal Handler --- */
+/* --- signal handler --- */
 static void sigint_handler(int signo) {
     (void)signo;
     exiting = 1;
-    for (int i = 0; i < link_count; i++) {
-        if (links[i]) {
-            bpf_link__destroy(links[i]);
-            links[i] = NULL;
-            fprintf(stderr, "\n[!] XDP detached from interface #%d\n", i);
-        }
-    }
+    fprintf(stderr, "\n[!] SIGINT received, shutting down...\n");
 }
 
-/* --- Callback dari ring buffer --- */
+/* --- helper: parse comma-separated ifnames --- */
+static int parse_ifnames(const char *s, int **out_ifindexes)
+{
+    if (!s || !out_ifindexes) return -1;
+    int max = 1;
+    for (const char *p = s; *p; ++p) if (*p == ',') ++max;
+    int *arr = calloc(max, sizeof(int));
+    if (!arr) return -1;
+
+    char *copy = strdup(s);
+    if (!copy) { free(arr); return -1; }
+
+    int cur = 0;
+    char *tok = strtok(copy, ",");
+    while (tok && cur < max) {
+        /* trim leading/trailing whitespace */
+        while (*tok && (*tok == ' ' || *tok == '\t')) tok++;
+        char *end = tok + strlen(tok) - 1;
+        while (end > tok && (*end == ' ' || *end == '\t')) { *end = '\0'; --end; }
+
+        if (strlen(tok) == 0) { tok = strtok(NULL, ","); continue; }
+        int idx = if_nametoindex(tok);
+        if (idx == 0) {
+            fprintf(stderr, "Invalid ifname: %s\n", tok);
+            free(copy);
+            free(arr);
+            return -1;
+        }
+        arr[cur++] = idx;
+        tok = strtok(NULL, ",");
+    }
+    free(copy);
+    *out_ifindexes = arr;
+    return cur;
+}
+
+/* --- ring buffer callback  --- */
 static int handle_event(void *ctx, void *data, size_t len) {
+    (void)ctx;
     if (len < sizeof(struct flow_event))
         return 0;
 
-    /* salin event */
     struct flow_event tmp;
     memcpy(&tmp, data, sizeof(tmp));
 
-    /* push ke worker */
     struct flow_event *wev = malloc(sizeof(tmp));
     if (wev) {
         memcpy(wev, &tmp, sizeof(tmp));
         push_event_to_worker(wev);
     }
 
-    /* simpan ke collector buffer */
     pthread_mutex_lock(&collector_lock);
     if (collector_len >= collector_cap) {
         size_t newcap = (collector_cap == 0) ? 8192 : collector_cap * 2;
@@ -90,14 +110,14 @@ static int handle_event(void *ctx, void *data, size_t len) {
     if (collector_len < collector_cap) {
         collector_buf[collector_len++].ev = tmp;
     }
-    if (collector_len >= collector_cap || collector_len % 1024 == 0)
+    if (collector_len >= collector_cap || (collector_len % 1024) == 0)
         pthread_cond_signal(&collector_cond);
     pthread_mutex_unlock(&collector_lock);
 
     return 0;
 }
 
-/* --- Sorting & Flush ke CSV --- */
+/* --- collector utilities --- */
 static int cmp_ev_ts(const void *a, const void *b) {
     const struct ev_copy *x = a;
     const struct ev_copy *y = b;
@@ -108,9 +128,7 @@ static int cmp_ev_ts(const void *a, const void *b) {
 
 static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n) {
     if (!out || !arr || n == 0) return;
-
     qsort(arr, n, sizeof(arr[0]), cmp_ev_ts);
-
     for (size_t i = 0; i < n; ++i) {
         struct flow_event *e = &arr[i].ev;
         fprintf(out, "%llu,%d,%u,%u,%u,%u,%u\n",
@@ -125,10 +143,8 @@ static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n) {
     fflush(out);
 }
 
-/* --- Thread collector --- */
 static void *collector_fn(void *arg) {
     FILE *out = (FILE *)arg;
-
     while (!exiting) {
         struct ev_copy *local_buf = NULL;
         size_t local_len = 0;
@@ -139,9 +155,8 @@ static void *collector_fn(void *arg) {
         ts.tv_sec  += collector_interval_ms / 1000;
 
         pthread_mutex_lock(&collector_lock);
-        if (!collector_len) {
+        if (!collector_len)
             pthread_cond_timedwait(&collector_cond, &collector_lock, &ts);
-        }
 
         if (collector_len > 0) {
             local_buf = malloc(collector_len * sizeof(*local_buf));
@@ -170,9 +185,7 @@ static void *collector_fn(void *arg) {
             pthread_mutex_unlock(&collector_lock);
             flush_collector_to_csv(out ? out : stdout, left, left_n);
             free(left);
-        } else {
-            pthread_mutex_unlock(&collector_lock);
-        }
+        } else pthread_mutex_unlock(&collector_lock);
     } else pthread_mutex_unlock(&collector_lock);
 
     return NULL;
@@ -182,24 +195,21 @@ int main(int argc, char **argv) {
     struct flow_xdp_bpf *skel = NULL;
     struct bpf_program *prog;
     struct ring_buffer *rb = NULL;
-    int ifindex, err;
+    int *ifindexes = NULL;
+    int ret;
 
     if (argc < 3 || strcmp(argv[1], "-i") != 0) {
-        fprintf(stderr, "Usage: %s -i <ifname> [debug|bench|csv] [-t num_threads]\n", argv[0]);
+        fprintf(stderr, "Usage: %s -i <if1[,if2,...]> [debug|bench|csv] [-t num_threads]\n", argv[0]);
         return 1;
     }
 
-    ifindex = if_nametoindex(argv[2]);
-    if (!ifindex) {
-        fprintf(stderr, "Invalid ifname: %s\n", argv[2]);
-        return 1;
-    }
-
+    /* parse mode */
     if (argc > 3 && argv[3][0] != '-') {
         if (strcmp(argv[3], "bench") == 0) g_mode = MODE_BENCH;
         else if (strcmp(argv[3], "csv") == 0) g_mode = MODE_CSV;
     }
 
+    /* parse threads */
     g_num_workers = 1;
     for (int i = 3; i < argc; i++) {
         if (strcmp(argv[i], "-t") == 0 && i + 1 < argc) {
@@ -208,72 +218,57 @@ int main(int argc, char **argv) {
         }
     }
 
-    fprintf(stderr, "[*] mode=%s, workers=%d\n",
+    /* parse ifnames (separated by comma) */
+    link_count = parse_ifnames(argv[2], &ifindexes);
+    if (link_count <= 0) {
+        fprintf(stderr, "No valid interfaces parsed from: %s\n", argv[2]);
+        return 1;
+    }
+
+    fprintf(stderr, "[*] mode=%s, workers=%d, interfaces=%d\n",
         g_mode == MODE_BENCH ? "bench" :
         g_mode == MODE_CSV   ? "csv"   : "debug",
-        g_num_workers);
+        g_num_workers, link_count);
 
-    struct timespec start_time, end_time;
-    clock_gettime(CLOCK_MONOTONIC, &start_time);
-    
     signal(SIGINT, sigint_handler);
 
     skel = flow_xdp_bpf__open_and_load();
     if (!skel) {
         fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        free(ifindexes);
         return 1;
     }
 
+    /* attach XDP program to each interface and store links */
+    g_links = calloc(link_count, sizeof(*g_links));
+    if (!g_links) { flow_xdp_bpf__destroy(skel); free(ifindexes); return 1; }
+
     prog = skel->progs.xdp_flow;
-    /* --- multi-interface attach --- */
-    struct bpf_link *links[8] = {0};
-    int link_count = 0;
-
-    char *ifnames = strdup(argv[2]);
-    char *tok = strtok(ifnames, ",");
-    while (tok && link_count < 8) {
-        int ifx = if_nametoindex(tok);
-        if (!ifx) {
-            fprintf(stderr, "Invalid ifname: %s\n", tok);
+    for (int i = 0; i < link_count; ++i) {
+        int ifidx = ifindexes[i];
+        struct bpf_link *l = bpf_program__attach_xdp(prog, ifidx);
+        if (libbpf_get_error(l)) {
+            fprintf(stderr, "Failed to attach XDP on index %d\n", ifidx);
+            g_links[i] = NULL;
         } else {
-            links[link_count] = bpf_program__attach_xdp(prog, ifx);
-            if (libbpf_get_error(links[link_count])) {
-                fprintf(stderr, "Failed to attach XDP on %s: %ld\n",
-                        tok, libbpf_get_error(links[link_count]));
-                links[link_count] = NULL;
-            } else {
-                fprintf(stderr, "[+] Attached on interface %s (ifindex=%d)\n", tok, ifx);
-                link_count++;
-            }
+            g_links[i] = l;
+            fprintf(stderr, "Attached XDP on ifindex=%d\n", ifidx);
         }
-        tok = strtok(NULL, ",");
-    }
-    free(ifnames);
-
-    if (link_count == 0) {
-        fprintf(stderr, "No valid interfaces attached. Exiting.\n");
-        goto cleanup;
     }
 
-    g_link = bpf_program__attach_xdp(prog, ifindex);
-    if (libbpf_get_error(g_link)) {
-        fprintf(stderr, "Failed to attach XDP: %ld\n", libbpf_get_error(g_link));
-        g_link = NULL;
-        goto cleanup;
-    }
-
+    /* ring buffer (single map) */
     rb = ring_buffer__new(bpf_map__fd(skel->maps.events), handle_event, NULL, NULL);
     if (!rb) {
         fprintf(stderr, "Failed to create ring buffer\n");
-        goto cleanup;
     }
 
     if (g_mode == MODE_CSV) {
         csv_file = fopen("result.csv", "w");
         if (csv_file)
-            fprintf(csv_file, "timestamp,ifindex,direction,ip_version,sport,dport,pkt_len\n");
+            fprintf(csv_file, "timestamp,ifindex,direction,ip_version,sport,dport,len\n");
     }
 
+    /* start collector thread if CSV mode */
     if (g_mode == MODE_CSV && csv_file) {
         if (pthread_create(&collector_thread, NULL, collector_fn, (void*)csv_file) != 0) {
             perror("pthread_create collector");
@@ -283,32 +278,26 @@ int main(int argc, char **argv) {
     start_workers(g_num_workers, &exiting);
 
     while (!exiting) {
-        err = ring_buffer__poll(rb, 500);
-        if (err == -EINTR || exiting) break;
+        ret = ring_buffer__poll(rb, 500);
+        if (ret == -EINTR || exiting) break;
     }
 
-    clock_gettime(CLOCK_MONOTONIC, &end_time);
-    double elapsed = (end_time.tv_sec - start_time.tv_sec) +
-                    (end_time.tv_nsec - start_time.tv_nsec) / 1e9;
-
-    uint64_t dropped = atomic_load(&g_dropped);
-
-    fprintf(stderr, "\n[SUMMARY] Total runtime: %.3f seconds\n", elapsed);
-    fprintf(stderr, "[SUMMARY] Total dropped packets: %lu\n", dropped);
-    fprintf(stderr, "[SUMMARY] Threads used: %d\n", g_num_workers);
-
-cleanup:
-    exiting = 1;
-    pthread_cond_signal(&collector_cond);
-    if (collector_thread) pthread_join(collector_thread, NULL);
+    /* cleanup/free resources */
     stop_workers();
     if (rb) ring_buffer__free(rb);
-    if (g_link) bpf_link__destroy(g_link);
+
+    for (int i = 0; i < link_count; ++i) {
+        if (g_links && g_links[i]) bpf_link__destroy(g_links[i]);
+    }
+    free(g_links);
+    g_links = NULL;
+
     if (skel) flow_xdp_bpf__destroy(skel);
     if (csv_file) {
         fclose(csv_file);
         fprintf(stderr, "[*] CSV log saved to result.csv\n");
     }
+    free(ifindexes);
 
     fprintf(stderr, "\n[*] Program exited cleanly\n");
     return 0;
