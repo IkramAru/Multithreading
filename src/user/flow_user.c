@@ -22,6 +22,12 @@ atomic_uint_fast64_t g_dropped = 0;
 
 static struct bpf_link **g_links = NULL;
 static int link_count = 0;
+
+/* mapping ifindex -> ifname + direction */
+static int *g_ifindexes = NULL;
+static char **g_ifnames = NULL;
+static int *g_ifdirs = NULL;
+
 static enum { MODE_DEBUG, MODE_BENCH, MODE_CSV } g_mode = MODE_DEBUG;
 static FILE *csv_file = NULL;
 static volatile sig_atomic_t exiting = 0;
@@ -126,15 +132,42 @@ static int cmp_ev_ts(const void *a, const void *b) {
     return 0;
 }
 
+static const char *dir_str(int d) { return d ? "OUT" : "IN"; }
+
+/* helper: lookup ifname + dir by ifindex; returns 0 on success */
+static int lookup_ifmeta(int ifidx, const char **out_name, int *out_dir) {
+    if (!g_ifindexes || !g_ifnames || !g_ifdirs) return -1;
+    for (int i = 0; i < link_count; ++i) {
+        if (g_ifindexes[i] == ifidx) {
+            if (out_name) *out_name = g_ifnames[i];
+            if (out_dir)  *out_dir  = g_ifdirs[i];
+            return 0;
+        }
+    }
+    return -1;
+}
+
 static void flush_collector_to_csv(FILE *out, struct ev_copy *arr, size_t n) {
     if (!out || !arr || n == 0) return;
     qsort(arr, n, sizeof(arr[0]), cmp_ev_ts);
     for (size_t i = 0; i < n; ++i) {
         struct flow_event *e = &arr[i].ev;
-        fprintf(out, "%llu,%d,%u,%u,%u,%u,%u\n",
+
+        const char *ifname = NULL;
+        int dir = 0;
+        if (lookup_ifmeta(e->ifindex, &ifname, &dir) != 0) {
+            /* unknown interface: use numeric ifindex and default IN */
+            char tmp[32];
+            snprintf(tmp, sizeof(tmp), "if%u", e->ifindex);
+            ifname = strdup(tmp);
+            dir = 0;
+        }
+
+        /* Writes output */
+        fprintf(out, "%llu,%s,%s,%u,%u,%u,%u\n",
             (unsigned long long)e->ts_ns,
-            e->ifindex,
-            (unsigned)e->direction,
+            ifname ? ifname : "unknown",
+            dir ? "OUT" : "IN",
             (unsigned)e->ip_version,
             (unsigned)e->sport,
             (unsigned)e->dport,
@@ -225,6 +258,31 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    g_ifindexes = ifindexes;
+
+    /* allocate names + directions */
+    g_ifnames = calloc(link_count, sizeof(char*));
+    g_ifdirs  = calloc(link_count, sizeof(int));
+    if (!g_ifnames || !g_ifdirs) {
+        perror("calloc ifname/ifdir");
+        free(ifindexes);
+        return 1;
+    }
+
+    /* populate names (if_indextoname) and directions: index 0 = IN, index 1 = OUT*/
+    for (int i = 0; i < link_count; ++i) {
+        char buf[IF_NAMESIZE];
+        if (if_indextoname(ifindexes[i], buf) != NULL) {
+            g_ifnames[i] = strdup(buf);
+        } else {
+            /* fallback to numeric string */
+            char tmp[32];
+            snprintf(tmp, sizeof(tmp), "if%d", ifindexes[i]);
+            g_ifnames[i] = strdup(tmp);
+        }
+        g_ifdirs[i] = (link_count == 2 && i == 1) ? 1 : 0;
+    }
+
     fprintf(stderr, "[*] mode=%s, workers=%d, interfaces=%d\n",
         g_mode == MODE_BENCH ? "bench" :
         g_mode == MODE_CSV   ? "csv"   : "debug",
@@ -297,6 +355,13 @@ int main(int argc, char **argv) {
         fclose(csv_file);
         fprintf(stderr, "[*] CSV log saved to result.csv\n");
     }
+    if (g_ifnames) {
+        for (int i = 0; i < link_count; ++i) if (g_ifnames[i]) free(g_ifnames[i]);
+        free(g_ifnames);
+        g_ifnames = NULL;
+    }
+    if (g_ifdirs) { free(g_ifdirs); g_ifdirs = NULL; }
+    g_ifindexes = NULL;
     free(ifindexes);
 
     fprintf(stderr, "\n[*] Program exited cleanly\n");
