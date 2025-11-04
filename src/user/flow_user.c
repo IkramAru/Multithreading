@@ -50,39 +50,59 @@ static void sigint_handler(int signo) {
     fprintf(stderr, "\n[!] SIGINT received, shutting down...\n");
 }
 
-/* --- helper: parse comma-separated ifnames --- */
-static int parse_ifnames(const char *s, int **out_ifindexes)
+/* --- helper: parse comma-separated ifnames with optional :in/:out --- */
+static int parse_ifnames(const char *s, int out_ifindexes, int out_dirs, char ***out_names)
 {
-    if (!s || !out_ifindexes) return -1;
+    if (!s  !out_ifindexes  !out_dirs || !out_names)
+        return -1;
+
     int max = 1;
-    for (const char *p = s; *p; ++p) if (*p == ',') ++max;
-    int *arr = calloc(max, sizeof(int));
-    if (!arr) return -1;
+    for (const char *p = s; *p; ++p)
+        if (*p == ',') ++max;
+
+    int *arr_idx = calloc(max, sizeof(int));
+    int *arr_dir = calloc(max, sizeof(int));
+    char **arr_name = calloc(max, sizeof(char *));
+    if (!arr_idx  !arr_dir  !arr_name)
+        return -1;
 
     char *copy = strdup(s);
-    if (!copy) { free(arr); return -1; }
+    if (!copy)
+        return -1;
 
     int cur = 0;
     char *tok = strtok(copy, ",");
     while (tok && cur < max) {
-        /* trim leading/trailing whitespace */
+        // Trim spaces
         while (*tok && (*tok == ' ' || *tok == '\t')) tok++;
         char *end = tok + strlen(tok) - 1;
-        while (end > tok && (*end == ' ' || *end == '\t')) { *end = '\0'; --end; }
+        while (end > tok && (*end == ' ' || *end == '\t')) { *end = '\0'; end--; }
+        if (!*tok) { tok = strtok(NULL, ","); continue; }
 
-        if (strlen(tok) == 0) { tok = strtok(NULL, ","); continue; }
+        // Split by ':' if direction is provided
+        char *dirpart = strchr(tok, ':');
+        if (dirpart) *dirpart++ = '\0';
+
         int idx = if_nametoindex(tok);
         if (idx == 0) {
             fprintf(stderr, "Invalid ifname: %s\n", tok);
             free(copy);
-            free(arr);
+            free(arr_idx); free(arr_dir); free(arr_name);
             return -1;
         }
-        arr[cur++] = idx;
+
+        arr_idx[cur] = idx;
+        arr_name[cur] = strdup(tok);
+        arr_dir[cur] = (dirpart && strcasecmp(dirpart, "out") == 0) ? 1 : 0; // default IN if not specified
+        cur++;
+
         tok = strtok(NULL, ",");
     }
+
     free(copy);
-    *out_ifindexes = arr;
+    *out_ifindexes = arr_idx;
+    *out_dirs = arr_dir;
+    *out_names = arr_name;
     return cur;
 }
 
@@ -252,7 +272,7 @@ int main(int argc, char **argv) {
     }
 
     /* parse ifnames (separated by comma) */
-    link_count = parse_ifnames(argv[2], &ifindexes);
+    link_count = parse_ifnames(argv[2], &g_ifindexes, &g_ifdirs, &g_ifnames);
     if (link_count <= 0) {
         fprintf(stderr, "No valid interfaces parsed from: %s\n", argv[2]);
         return 1;
