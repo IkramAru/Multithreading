@@ -51,9 +51,9 @@ static void sigint_handler(int signo) {
 }
 
 /* --- helper: parse comma-separated ifnames with optional :in/:out --- */
-static int parse_ifnames(const char *s, int out_ifindexes, int out_dirs, char ***out_names)
+static int parse_ifnames(const char *s, int **out_ifindexes, int **out_dirs, char ***out_names)
 {
-    if (!s  !out_ifindexes  !out_dirs || !out_names)
+    if (!s || !out_ifindexes || !out_dirs || !out_names)
         return -1;
 
     int max = 1;
@@ -63,7 +63,7 @@ static int parse_ifnames(const char *s, int out_ifindexes, int out_dirs, char **
     int *arr_idx = calloc(max, sizeof(int));
     int *arr_dir = calloc(max, sizeof(int));
     char **arr_name = calloc(max, sizeof(char *));
-    if (!arr_idx  !arr_dir  !arr_name)
+    if (!arr_idx || !arr_dir || !arr_name)
         return -1;
 
     char *copy = strdup(s);
