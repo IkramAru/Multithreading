@@ -6,11 +6,22 @@
 
 char LICENSE[] SEC("license") = "Dual BSD/GPL";
 
+#ifndef always_inline
+#define always_inline __attribute__((always_inline)) inline
+#endif
+
 /* Ring buffer map untuk kirim event ke user space */
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
     __uint(max_entries, 1 << 24); /* 16 MB */
 } events SEC(".maps");
+
+struct {
+    __uint(type, BPF_MAP_TYPE_HASH);
+    __type(key, u32);
+    __type(value, u32);
+    __uint(max_entries, 16);
+} ifdir_map SEC(".maps");
 
 /* --- Definisi konstanta protokol (fallback jika vmlinux.h kosong) --- */
 #ifndef ETH_P_IP
@@ -25,11 +36,9 @@ struct {
 #ifndef ETH_P_8021AD
 #define ETH_P_8021AD 0x88A8
 #endif
-#define RX_IFINDEX 3
-#define TX_IFINDEX 4
 
 /* --- Helper parsing Ethernet + VLAN --- */
-static __always_inline int parse_eth(void **cur, void *end, __u16 *h_proto) {
+static always_inline int parse_eth(void **cur, void *end, u16 *h_proto) {
     struct ethhdr *eth = (void *)*cur;
     if ((void *)(eth + 1) > end) return -1;
     *h_proto = bpf_ntohs(eth->h_proto);
@@ -64,16 +73,17 @@ int xdp_flow(struct xdp_md *ctx)
 
     __builtin_memset(ev, 0, sizeof(*ev));
     ev->ts_ns   = bpf_ktime_get_ns();
-    ev->ifindex = ctx->ingress_ifindex;
+    ev->ifindex = ifindex;
     ev->pkt_len = (__u16)((long)data_end - (long)data);
 
-    if (ifindex == RX_IFINDEX)
-        ev->direction = 0;  // RX
-    else if (ifindex == TX_IFINDEX)
-        ev->direction = 1;  // TX
+    /* lookup direction dari ifdir_map; default = 2 (unknown) */
+    __u32 dir_default = 2;
+    __u32 *dirp = bpf_map_lookup_elem(&ifdir_map, &ifindex);
+    if (dirp)
+        ev->direction = *dirp;
     else
-        ev->direction = 2;  // unknown
-        
+        ev->direction = dir_default;
+
     /* --- Parsing IPv4 --- */
     if (h_proto == ETH_P_IP) {
         struct iphdr *ip = (void *)cur;

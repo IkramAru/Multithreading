@@ -263,10 +263,39 @@ int main(int argc, char **argv) {
 
     signal(SIGINT, sigint_handler);
 
-    skel = flow_xdp_bpf__open_and_load();
+    /* Check for custom BTF path */
+    const char *btf_file = getenv("BTF_FILE");
+    struct bpf_object_open_opts open_opts = { sizeof(struct bpf_object_open_opts) };
+    if (btf_file) {
+        fprintf(stderr, "[*] Using custom BTF file: %s\n", btf_file);
+        open_opts.btf_custom_path = btf_file;
+    }
+
+    skel = flow_xdp_bpf__open_opts(&open_opts);
     if (!skel) {
-        fprintf(stderr, "Failed to open and load BPF skeleton\n");
+        fprintf(stderr, "Failed to open BPF skeleton\n");
         return 1;
+    }
+
+    if (flow_xdp_bpf__load(skel)) {
+        fprintf(stderr, "Failed to load BPF skeleton\n");
+        flow_xdp_bpf__destroy(skel);
+        return 1;
+    }
+
+    if (skel && skel->maps.ifdir_map) {
+        int fd = bpf_map__fd(skel->maps.ifdir_map);
+        if (fd >= 0) {
+            for (int i = 0; i < link_count; ++i) {
+                __u32 idx = (uint32_t) g_ifindexes[i];
+                __u32 dir = g_ifdirs ? (uint32_t) g_ifdirs[i] : 0;
+                if (bpf_map_update_elem(fd, &idx, &dir, BPF_ANY) != 0) {
+                    fprintf(stderr, "warn: failed set ifdir %u -> %u: %s\n", idx, dir, strerror(errno));
+                } else {
+                    fprintf(stderr, "[+] set ifindex %u -> dir=%u\n", idx, dir);
+                }
+            }
+        }
     }
 
     g_links = calloc(link_count, sizeof(*g_links));
