@@ -1,5 +1,4 @@
-#include "worker.h"
-#include "queue.h"
+#define _GNU_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
@@ -8,6 +7,10 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include <unistd.h>
+
+#include "flow_common.h"
+#include "queue.h"
+#include "worker.h"
 
 #ifndef MAX_WORKERS
 #define MAX_WORKERS 64
