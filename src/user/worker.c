@@ -316,10 +316,28 @@ void stop_workers(void)
     fprintf(stderr, "[SUMMARY] All worker threads joined cleanly\n");
 }
 
-/* push_event_to_worker: round-robin */
+/* push_event_to_worker: Flow Hashing (5-tuple affinity) */
 void push_event_to_worker(struct flow_event *ev)
 {
-    static atomic_uint rr_index = 0;
-    unsigned int idx = atomic_fetch_add(&rr_index, 1u) % (unsigned int)g_actual_workers;
+    /* Ensure flow affinity */
+    flow_key_t key;
+    memset(&key, 0, sizeof(key));
+    key.ip_ver = ev->ip_version;
+    key.l4_proto = ev->l4_proto;
+    if (key.ip_ver == 4) {
+        key.src.v4 = ev->saddr_v4;
+        key.dst.v4 = ev->daddr_v4;
+    } else {
+        memcpy(key.src.v6, ev->saddr_v6, 16);
+        memcpy(key.dst.v6, ev->daddr_v6, 16);
+    }
+    key.sport = ev->sport;
+    key.dport = ev->dport;
+
+    /* Use the same hash function as the flow table to ensure consistency */
+    uint32_t batch_hash = hash_flow_key(&key);
+    
+    /* Map to worker */
+    unsigned int idx = batch_hash % (unsigned int)g_actual_workers;
     queue_push(&g_queues[idx], ev);
 }
