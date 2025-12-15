@@ -13,5 +13,7 @@ worker_stats_T4.csv
 worker_stats_T8.csv
 worker_stats_T16.csv
 worker_stats_T23.csv
-results
+results/*
+!results/*.py
 Proposal_TA_D121211104.pdf
+Semhas Without CSS.pdf

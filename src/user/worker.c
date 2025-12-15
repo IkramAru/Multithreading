@@ -319,17 +319,17 @@ void stop_workers(void)
 /* push_event_to_worker: Flow Hashing (5-tuple affinity) */
 void push_event_to_worker(struct flow_event *ev)
 {
-    /* Ensure flow affinity */
+    /* Construct key for hashing to ensure flow affinity */
     flow_key_t key;
     memset(&key, 0, sizeof(key));
     key.ip_ver = ev->ip_version;
-    key.l4_proto = ev->l4_proto;
+    key.proto = ev->l4_proto;
     if (key.ip_ver == 4) {
-        key.src.v4 = ev->saddr_v4;
-        key.dst.v4 = ev->daddr_v4;
+        key.saddr = ev->saddr_v4;
+        key.daddr = ev->daddr_v4;
     } else {
-        memcpy(key.src.v6, ev->saddr_v6, 16);
-        memcpy(key.dst.v6, ev->daddr_v6, 16);
+        memcpy(key.saddr_v6, ev->saddr_v6, 16);
+        memcpy(key.daddr_v6, ev->daddr_v6, 16);
     }
     key.sport = ev->sport;
     key.dport = ev->dport;
