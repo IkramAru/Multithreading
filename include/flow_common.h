@@ -6,15 +6,15 @@ typedef unsigned short     __u16;
 typedef unsigned int       __u32;
 typedef unsigned long long __u64;
 
-/* Event per-paket: user-space bebas agregasi jadi flow */
+/*Mendefinisikan struktur event per-paket*/
 struct flow_event {
     __u64 packets;         
     __u64 bytes;         
-    __u64 ts_ns;         /* waktu paket terakhir diterima*/
-    __u32 ifindex;       /* interface asal paket */
-    __u8  ip_version;    /* 4 atau 6 */
+    __u64 ts_ns;         /* timestamp*/
+    __u32 ifindex;       /* interface asal */
+    __u8  ip_version;    /* 4 or 6 */
     __u8  l4_proto;      /* IPPROTO_TCP/UDP/ICMP/... */
-    __u16 pkt_len;       /* panjang paket */
+    __u16 pkt_len;       /* packet length */
 
     /* IPv4 */
     __u32 saddr_v4;      /* network byte order */
@@ -31,4 +31,4 @@ struct flow_event {
     __u8  _pad[3];
 };
 
-#endif /* FLOW_COMMON_H */
+#endif

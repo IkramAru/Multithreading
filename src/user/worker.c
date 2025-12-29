@@ -29,7 +29,7 @@ extern int g_num_workers;
 static atomic_uint_fast64_t g_total_processed = 0;
 static FILE *csv_log = NULL;
 
-/* --- Flow Table Implementation --- */
+/* implementasi flow table */
 #define HASH_SIZE 65536
 
 typedef struct {
@@ -71,7 +71,7 @@ static void *worker_thread_fn(void *arg)
     free(arg);
     struct event_queue *q = &g_queues[worker_id];
 
-    /* Local Flow Table */
+    /* local flow table */
     flow_node_t **buckets = calloc(HASH_SIZE, sizeof(flow_node_t *));
     if (!buckets) {
         perror("calloc buckets");
@@ -80,7 +80,7 @@ static void *worker_thread_fn(void *arg)
 
     uint64_t latency_sum = 0;
     uint64_t latency_max = 0;
-    uint64_t event_count = 0; /* Packet count for latency calc */
+    uint64_t event_count = 0;
     uint64_t last_print_us = 0;
 
     /* Init last_print_us */
@@ -98,7 +98,7 @@ static void *worker_thread_fn(void *arg)
             continue;
         }
 
-        /* compute latency */
+        /* Hitung latency */
         struct timespec ts_now;
         clock_gettime(CLOCK_MONOTONIC, &ts_now);
         uint64_t now_ns = (uint64_t)ts_now.tv_sec * 1000000000ULL + ts_now.tv_nsec;
@@ -111,7 +111,7 @@ static void *worker_thread_fn(void *arg)
         if (latency_us > old_max)
             atomic_store(&g_total_latency_max, latency_us);
 
-        /* --- Flow Aggregation --- */
+        /* Aggregasi flow */
         flow_key_t key;
         memset(&key, 0, sizeof(key));
         key.ip_ver = e->ip_version;
@@ -159,14 +159,13 @@ static void *worker_thread_fn(void *arg)
 
         uint64_t now_us = now_ns / 1000ULL;
 
-        /* print every 50ms */
+        /* print setiap 50ms */
         if (now_us - last_print_us >= 50000ULL) {
-            /* Count Active Flows in this interval */
-            /* Considered as a flow active if it was seen since the last print */
+            /* Hitung flow aktif */
             uint64_t active_flows = 0;
             uint64_t cutoff_ns = last_print_us * 1000ULL; // Convert back to ns
             
-            /* Prune very old flows (> 5 seconds) to prevent memory leak */
+            /* Prune flow idle*/
             uint64_t prune_cutoff_ns = (now_us > 5000000ULL) ? (now_us - 5000000ULL) * 1000ULL : 0;
 
             for (int i = 0; i < HASH_SIZE; i++) {
@@ -177,7 +176,6 @@ static void *worker_thread_fn(void *arg)
                         active_flows++;
                     }
                     
-                    /* Pruning logic */
                     if (curr->last_seen_ns < prune_cutoff_ns) {
                         flow_node_t *to_free = curr;
                         if (prev) prev->next = curr->next;
@@ -198,7 +196,7 @@ static void *worker_thread_fn(void *arg)
             time_t sec = ts_now.tv_sec;
             localtime_r(&sec, &tm_info);
 
-            /* Throughput is now Active Flows Count (not rate per second) */
+            /* Throughput per flow aktif */
             double throughput = (double)active_flows; 
 
             fprintf(stderr,
@@ -223,7 +221,7 @@ static void *worker_thread_fn(void *arg)
                         global_avg, total_max, total_evt);
             }
 
-            /* reset counters for next interval */
+            /* reset counters untuk interval selanjutnya */
             event_count = 0;
             latency_sum = 0;
             latency_max = 0;
@@ -245,7 +243,7 @@ static void *worker_thread_fn(void *arg)
     return NULL;
 }
 
-/* start_workers: spawn pthreads and init queues */
+/* summon pthreads and init queues */
 void start_workers(int num_workers, volatile sig_atomic_t *exiting)
 {
     if (num_workers <= 0) return;
@@ -265,13 +263,12 @@ void start_workers(int num_workers, volatile sig_atomic_t *exiting)
         if (pthread_create(&g_threads[i], NULL, worker_thread_fn, wid) != 0) {
             perror("pthread_create");
             free(wid);
-            /* mark fewer workers */
             g_actual_workers = i;
             break;
         }
     }
 
-    /* open CSV to save result */
+    /* save ke CSV */
     csv_log = fopen("worker_stats.csv", "w");
     if (csv_log) {
         fprintf(csv_log, "# Worker benchmark results (Flow-based)\n");
@@ -281,25 +278,24 @@ void start_workers(int num_workers, volatile sig_atomic_t *exiting)
         perror("fopen csv_log");
     }
 
-    /* don't join here — main will call stop_workers() */
+    /* main summon stop_workers() */
     fprintf(stderr, "Started %d worker threads (pthreads)\n", g_actual_workers);
 }
 
-/* stop_workers: set exiting and join */
+/* set exiting & join */
 void stop_workers(void)
 {
     if (g_exiting) *g_exiting = 1;
 
-    /* Wake all worker to avoid stuck at queue_pop */
     for (int i = 0; i < g_actual_workers; i++) {
         pthread_mutex_lock(&g_queues[i].lock);
         pthread_cond_broadcast(&g_queues[i].not_empty);
         pthread_mutex_unlock(&g_queues[i].lock);
     }
 
-    /* Wait for a moment to let workers exit their loop */
-    usleep(200000); // 0.2 seconds
-    fflush(stderr); // ensure all worker logs are printed
+    /* Menunggu workers exit loop */
+    usleep(200000);
+    fflush(stderr);
 
     fprintf(stderr, "\n[SUMMARY] Joining %d workers...\n", g_actual_workers);
 
@@ -316,10 +312,10 @@ void stop_workers(void)
     fprintf(stderr, "[SUMMARY] All worker threads joined cleanly\n");
 }
 
-/* push_event_to_worker: round-robin */
+/* Algoritma Round-Robin */
 void push_event_to_worker(struct flow_event *ev)
 {
-    static atomic_uint rr_index = 0;
+    static atomic   _uint rr_index = 0;
     unsigned int idx = atomic_fetch_add(&rr_index, 1u) % (unsigned int)g_actual_workers;
     queue_push(&g_queues[idx], ev);
 }

@@ -13,9 +13,10 @@ char LICENSE[] SEC("license") = "Dual BSD/GPL";
 /* Ring buffer map untuk kirim event ke user space */
 struct {
     __uint(type, BPF_MAP_TYPE_RINGBUF);
-    __uint(max_entries, 1 << 24); /* 16 MB */
+    __uint(max_entries, 1 << 24);
 } events SEC(".maps");
 
+/* Hash map cek arah interface */
 struct {
     __uint(type, BPF_MAP_TYPE_HASH);
     __type(key, u32);
@@ -23,7 +24,7 @@ struct {
     __uint(max_entries, 16);
 } ifdir_map SEC(".maps");
 
-/* --- Definisi konstanta protokol (fallback jika vmlinux.h kosong) --- */
+/* Definisi konstanta protokol */
 #ifndef ETH_P_IP
 #define ETH_P_IP 0x0800
 #endif
@@ -37,7 +38,7 @@ struct {
 #define ETH_P_8021AD 0x88A8
 #endif
 
-/* --- Helper parsing Ethernet + VLAN --- */
+/* Helper parsing Ethernet + VLAN */
 static always_inline int parse_eth(void **cur, void *end, u16 *h_proto) {
     struct ethhdr *eth = (void *)*cur;
     if ((void *)(eth + 1) > end) return -1;
@@ -54,7 +55,7 @@ static always_inline int parse_eth(void **cur, void *end, u16 *h_proto) {
     return 0;
 }
 
-/* --- Program utama XDP --- */
+/* Program utama XDP */
 SEC("xdp")
 int xdp_flow(struct xdp_md *ctx)
 {
@@ -69,14 +70,14 @@ int xdp_flow(struct xdp_md *ctx)
         return XDP_PASS;
 
     struct flow_event *ev = bpf_ringbuf_reserve(&events, sizeof(*ev), 0);
-    if (!ev) return XDP_PASS; /* kalau buffer penuh, event drop */
+    if (!ev) return XDP_PASS; /* event drop if buffer penuh */
 
     __builtin_memset(ev, 0, sizeof(*ev));
     ev->ts_ns   = bpf_ktime_get_ns();
     ev->ifindex = ifindex;
     ev->pkt_len = (__u16)((long)data_end - (long)data);
 
-    /* lookup direction dari ifdir_map; default = 2 (unknown) */
+    /* Lookup direction dari ifdir_map; default = 2 (unknown) */
     __u32 dir_default = 2;
     __u32 *dirp = bpf_map_lookup_elem(&ifdir_map, &ifindex);
     if (dirp)
@@ -84,7 +85,7 @@ int xdp_flow(struct xdp_md *ctx)
     else
         ev->direction = dir_default;
 
-    /* --- Parsing IPv4 --- */
+    /* Parsing IPv4 */
     if (h_proto == ETH_P_IP) {
         struct iphdr *ip = (void *)cur;
         if ((void *)(ip + 1) > data_end) goto out;
@@ -113,7 +114,8 @@ int xdp_flow(struct xdp_md *ctx)
             }
         }
     }
-    /* --- Parsing IPv6 --- */
+
+    /* Parsing IPv6 */
     else if (h_proto == ETH_P_IPV6) {
         struct ipv6hdr *ip6 = (void *)cur;
         if ((void *)(ip6 + 1) > data_end) goto out;

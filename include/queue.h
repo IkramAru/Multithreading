@@ -14,6 +14,7 @@
 
 extern atomic_uint_fast64_t g_dropped;
 
+/* Struktur queue */
 struct event_queue {
     struct flow_event *events[QUEUE_SIZE];
     int head;
@@ -24,6 +25,7 @@ struct event_queue {
     pthread_cond_t not_full;
 };
 
+/* Inisialisasi queue */
 static inline void queue_init(struct event_queue *q) {
     q->head = q->tail = q->count = 0;
     pthread_mutex_init(&q->lock, NULL);
@@ -31,10 +33,11 @@ static inline void queue_init(struct event_queue *q) {
     pthread_cond_init(&q->not_full, NULL);
 }
 
+/* Menambahkan event ke queue */
 static inline void queue_push(struct event_queue *q, struct flow_event *ev) {
     pthread_mutex_lock(&q->lock);
     if (q->count == QUEUE_SIZE) {
-        // Queue penuh, anggap drop
+        // if queue penuh, anggap drop
         atomic_fetch_add(&g_dropped, 1);
         pthread_mutex_unlock(&q->lock);
         free(ev);
@@ -49,6 +52,7 @@ static inline void queue_push(struct event_queue *q, struct flow_event *ev) {
     pthread_mutex_unlock(&q->lock);
 }
 
+/* Mengambil event dari queue */
 static inline struct flow_event *queue_pop(struct event_queue *q, volatile sig_atomic_t *exiting) {
     pthread_mutex_lock(&q->lock);
     while (q->count == 0 && !*exiting){

@@ -16,14 +16,14 @@
 #include "flow_xdp.skel.h"
 #include "worker.h"
 
-/* ------------------ Global Variables ------------------ */
+/* Global Variables */
 int g_num_workers = 1;
 atomic_uint_fast64_t g_dropped = 0;
 
 static struct bpf_link **g_links = NULL;
 static int link_count = 0;
 
-/* mapping ifindex -> ifname + direction (0=IN, 1=OUT) */
+/* Cek input untuk XDP */
 static int *g_ifindexes = NULL;
 static char **g_ifnames = NULL;
 static int *g_ifdirs = NULL;
@@ -32,7 +32,7 @@ static enum { MODE_DEBUG, MODE_BENCH, MODE_CSV } g_mode = MODE_DEBUG;
 static FILE *csv_file = NULL;
 static volatile sig_atomic_t exiting = 0;
 
-/* ------------------ Collector Globals ------------------ */
+/* Collector Globals */
 #define COLLECTOR_MAX_EVENTS 200000
 static pthread_t collector_thread;
 static pthread_mutex_t collector_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -44,14 +44,14 @@ static size_t collector_len = 0;
 static size_t collector_cap = 0;
 static const unsigned collector_interval_ms = 100;
 
-/* ------------------ Signal Handler ------------------ */
+/* Signal Handler */
 static void sigint_handler(int signo) {
     (void)signo;
     exiting = 1;
     fprintf(stderr, "\n[!] SIGINT received, shutting down...\n");
 }
 
-/* ------------------ Parse ifnames like ens3f0np0:in,ens3f1np1:out ------------------ */
+/* Parse ifnames */
 static int parse_ifnames(const char *s)
 {
     if (!s) return -1;
@@ -101,7 +101,7 @@ static int parse_ifnames(const char *s)
     return cur;
 }
 
-/* ------------------ Ring Buffer Callback ------------------ */
+/* Ring Buffer Callback */
 static int handle_event(void *ctx, void *data, size_t len) {
     (void)ctx;
     if (len < sizeof(struct flow_event))
@@ -137,7 +137,7 @@ static int handle_event(void *ctx, void *data, size_t len) {
     return 0;
 }
 
-/* ------------------ CSV Collector ------------------ */
+/* CSV Collector */
 static int cmp_ev_ts(const void *a, const void *b) {
     const struct ev_copy *x = a;
     const struct ev_copy *y = b;
@@ -225,7 +225,7 @@ static void *collector_fn(void *arg) {
     return NULL;
 }
 
-/* ------------------ main() ------------------ */
+/* main */
 int main(int argc, char **argv) {
     struct flow_xdp_bpf *skel = NULL;
     struct bpf_program *prog;
@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
 
     signal(SIGINT, sigint_handler);
 
-    /* Check for custom BTF path */
+    /* Check custom BTF path */
     const char *btf_file = getenv("BTF_FILE");
     struct bpf_object_open_opts open_opts = { sizeof(struct bpf_object_open_opts) };
     if (btf_file) {
