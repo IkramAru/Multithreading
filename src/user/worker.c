@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sched.h>
 
 #include "flow_common.h"
 #include "queue.h"
@@ -198,12 +199,14 @@ static void *worker_thread_fn(void *arg)
 
             /* Throughput per flow aktif */
             double throughput = (double)active_flows; 
+            
+            int cpu_id = sched_getcpu();
 
             fprintf(stderr,
-                "[%02d:%02d:%02d.%03lu] [Worker %d] packets=%lu active_flows=%lu dropped=%lu avg_lat=%.2f us max_lat=%lu us\n",
+                "[%02d:%02d:%02d.%03lu] [Worker %d (Core %d)] packets=%lu active_flows=%lu dropped=%lu avg_lat=%.2f us max_lat=%lu us\n",
                 tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
                 (unsigned long)(ts_now.tv_nsec / 1000000ULL),
-                worker_id, event_count, active_flows, dropped, avg_lat, latency_max);
+                worker_id, cpu_id, event_count, active_flows, dropped, avg_lat, latency_max);
 
             if (csv_log) {
                 fprintf(csv_log, "%lu,%d,%.2f,%.2f,%lu,%lu\n",
@@ -240,6 +243,7 @@ static void *worker_thread_fn(void *arg)
     }
     free(buckets);
 
+    fprintf(stderr, "[Worker %d] Finished/Exited on Core %d\n", worker_id, sched_getcpu());
     return NULL;
 }
 
