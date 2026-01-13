@@ -72,6 +72,22 @@ static void *worker_thread_fn(void *arg)
     free(arg);
     struct event_queue *q = &g_queues[worker_id];
 
+    /* CPU Pinning: Round-Robin */
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (num_cores > 0) {
+        cpu_set_t cpuset;
+        CPU_ZERO(&cpuset);
+        int core_id = worker_id % num_cores;
+        CPU_SET(core_id, &cpuset);
+
+        int rc = pthread_setaffinity_np(pthread_self(), sizeof(cpu_set_t), &cpuset);
+        if (rc == 0) {
+            fprintf(stderr, "[Worker %d] Successfully pinned to Logical Core %d\n", worker_id, core_id);
+        } else {
+            fprintf(stderr, "[Worker %d] Failed to pin to Logical Core %d: %s\n", worker_id, core_id, strerror(rc));
+        }
+    }
+
     /* local flow table */
     flow_node_t **buckets = calloc(HASH_SIZE, sizeof(flow_node_t *));
     if (!buckets) {
