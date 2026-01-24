@@ -335,7 +335,7 @@ void stop_workers(void)
 /* Algoritma Round-Robin */
 void push_event_to_worker(struct flow_event *ev)
 {
-    static atomic   _uint rr_index = 0;
+    static atomic_uint rr_index = 0;
     unsigned int idx = atomic_fetch_add(&rr_index, 1u) % (unsigned int)g_actual_workers;
     queue_push(&g_queues[idx], ev);
 }
