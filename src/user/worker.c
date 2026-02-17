@@ -7,6 +7,7 @@
 #include <stdatomic.h>
 #include <pthread.h>
 #include <unistd.h>
+#include <sched.h>
 
 #include "flow_common.h"
 #include "queue.h"
@@ -199,15 +200,17 @@ static void *worker_thread_fn(void *arg)
             /* Throughput per flow aktif */
             double throughput = (double)active_flows; 
 
+            int cpu_id = sched_getcpu();
+
             fprintf(stderr,
-                "[%02d:%02d:%02d.%03lu] [Worker %d] packets=%lu active_flows=%lu dropped=%lu avg_lat=%.2f us max_lat=%lu us\n",
+                "[%02d:%02d:%02d.%03lu] [Worker %d (Core %d)] packets=%lu active_flows=%lu dropped=%lu avg_lat=%.2f us max_lat=%lu us\n",
                 tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
                 (unsigned long)(ts_now.tv_nsec / 1000000ULL),
-                worker_id, event_count, active_flows, dropped, avg_lat, latency_max);
+                worker_id, cpu_id, event_count, active_flows, dropped, avg_lat, latency_max);
 
             if (csv_log) {
-                fprintf(csv_log, "%lu,%d,%.2f,%.2f,%lu,%lu\n",
-                    now_us, worker_id, throughput, avg_lat, latency_max, dropped);
+                fprintf(csv_log, "%lu,%d,%.2f,%.2f,%lu,%lu,%d\n",
+                    now_us, worker_id, throughput, avg_lat, latency_max, dropped, cpu_id);
                 fflush(csv_log);
             }
 
@@ -272,7 +275,7 @@ void start_workers(int num_workers, volatile sig_atomic_t *exiting)
     csv_log = fopen("worker_stats.csv", "w");
     if (csv_log) {
         fprintf(csv_log, "# Worker benchmark results (Flow-based)\n");
-        fprintf(csv_log, "timestamp_us,worker_id,throughput_flow_per_s,avg_latency_us,max_latency_us,dropped\n");
+        fprintf(csv_log, "timestamp_us,worker_id,throughput_flow_per_s,avg_latency_us,max_latency_us,dropped,core_id\n");
         fflush(csv_log);
     } else {
         perror("fopen csv_log");
@@ -315,7 +318,7 @@ void stop_workers(void)
 /* Algoritma Round-Robin */
 void push_event_to_worker(struct flow_event *ev)
 {
-    static atomic   _uint rr_index = 0;
+    static atomic_uint rr_index = 0;
     unsigned int idx = atomic_fetch_add(&rr_index, 1u) % (unsigned int)g_actual_workers;
     queue_push(&g_queues[idx], ev);
 }
