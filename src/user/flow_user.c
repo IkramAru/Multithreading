@@ -232,6 +232,7 @@ int main(int argc, char **argv) {
     struct ring_buffer *rb = NULL;
     int ret;
 
+    /*Parsing argument*/
     if (argc < 3 || strcmp(argv[1], "-i") != 0) {
         fprintf(stderr, "Usage: %s -i <if1[:in|out][,if2[:in|out]]> [debug|bench|csv] [-t num_threads]\n", argv[0]);
         return 1;

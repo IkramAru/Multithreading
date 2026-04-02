@@ -59,12 +59,14 @@ static always_inline int parse_eth(void **cur, void *end, u16 *h_proto) {
 SEC("xdp")
 int xdp_flow(struct xdp_md *ctx)
 {
+    /*Read pointer awal & akhir*/
     void *data_end = (void *)(long)ctx->data_end;
     void *data     = (void *)(long)ctx->data;
     void *cur = data;
 
     __u32 ifindex = ctx->ingress_ifindex;
 
+    /*Parsing ethernet & VLAN*/
     __u16 h_proto;
     if (parse_eth(&cur, data_end, &h_proto) < 0)
         return XDP_PASS;
