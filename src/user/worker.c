@@ -199,6 +199,8 @@ static void *worker_thread_fn(void *arg)
 
             /* Throughput per flow aktif */
             double throughput = (double)active_flows; 
+            
+            int cpu_id = sched_getcpu();
 
             int cpu_id = sched_getcpu();
 
@@ -243,6 +245,7 @@ static void *worker_thread_fn(void *arg)
     }
     free(buckets);
 
+    fprintf(stderr, "[Worker %d] Finished/Exited on Core %d\n", worker_id, sched_getcpu());
     return NULL;
 }
 
