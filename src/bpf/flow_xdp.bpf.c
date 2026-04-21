@@ -27,7 +27,7 @@ struct {
 /* Definisi konstanta protokol */
 #ifndef ETH_P_IP
 #define ETH_P_IP 0x0800
-#endif
+#end
 #ifndef ETH_P_IPV6
 #define ETH_P_IPV6 0x86DD
 #endif

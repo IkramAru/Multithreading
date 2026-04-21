@@ -249,7 +249,7 @@ static void *worker_thread_fn(void *arg)
     return NULL;
 }
 
-/* summon pthreads and init queues */
+/* summon pthreads (workers) and init queues */
 void start_workers(int num_workers, volatile sig_atomic_t *exiting)
 {
     if (num_workers <= 0) return;
